@@ -653,3 +653,14 @@
 .post-actions textarea:focus {
   outline: 2px solid #a5b4fc;
 }
+
+
+/* Images attached to posts */
+.post-image {
+  display: block;
+  width: 100%;
+  max-height: 450px;
+  object-fit: contain;
+  border-radius: 12px;
+  margin-top: 12px;
+}

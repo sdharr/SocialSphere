@@ -1,23 +1,28 @@
 
-import { useState, useContext } from "react";
+import { useContext, useState } from "react";
 import AuthContext from "../context/AuthContext";
+import ImageUpload from "./ImageUpload";
 
 function CreatePost({ onPostCreated }) {
   const { token } = useContext(AuthContext);
 
   const [content, setContent] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [imageUrl, setImageUrl] = useState("");
+  const [uploadKey, setUploadKey] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!content.trim() || content.trim().length > 1000) {
-      setMessage("Post must contain 1 to 1000 characters.");
-      return;
-    }
 
-    setLoading(true);
+if (!content.trim() && !imageUrl) {
+  setMessage("Please add text or an image to your post.");
+  return;
+}
+
+
+    setSubmitting(true);
     setMessage("");
 
     try {
@@ -27,7 +32,10 @@ function CreatePost({ onPostCreated }) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ content: content.trim() }),
+        body: JSON.stringify({
+          content: content.trim(),
+          image: imageUrl,
+        }),
       });
 
       const data = await response.json();
@@ -36,14 +44,17 @@ function CreatePost({ onPostCreated }) {
         throw new Error(data.message || "Failed to create post");
       }
 
-      setContent("");
-      setMessage("Post published successfully!");
+      const newPost = data.post || data;
+      onPostCreated(newPost);
 
-      onPostCreated(data.post);
+      setContent("");
+      setImageUrl("");
+      setUploadKey((previous) => previous + 1);
+      setMessage("Post created successfully!");
     } catch (error) {
       setMessage(error.message);
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -52,21 +63,26 @@ function CreatePost({ onPostCreated }) {
       <h3>Create a Post</h3>
 
       <textarea
-        placeholder="What's on your mind?"
         value={content}
         onChange={(e) => setContent(e.target.value)}
-        maxLength={1000}
-        rows={4}
-        required
+        placeholder="What's on your mind?"
+        rows="4"
+        disabled={submitting}
       />
 
-      <p>{content.length}/1000 characters</p>
+      <ImageUpload
+        key={uploadKey}
+        token={token}
+        onUploaded={setImageUrl}
+      />
 
-      <button type="submit" disabled={loading}>
-        {loading ? "Publishing..." : "Publish Post"}
+      {imageUrl && <p>✅ Image ready to publish!</p>}
+
+      {message && <p>{message}</p>}
+
+      <button type="submit" disabled={submitting}>
+        {submitting ? "Publishing..." : "Publish Post"}
       </button>
-
-      <p role="status">{message}</p>
     </form>
   );
 }

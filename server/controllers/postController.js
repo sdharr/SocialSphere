@@ -3,35 +3,46 @@ const Post = require("../models/Post");
 const mongoose = require("mongoose");
 const User = require("../models/User");
 
+// CREATE POST
 const createPost = async (req, res) => {
   try {
-    const { content } = req.body;
+    const content =
+      typeof req.body.content === "string"
+        ? req.body.content.trim()
+        : "";
 
-    // Validate post content
-    if (typeof content !== "string" || !content.trim()) {
+    const image =
+      typeof req.body.image === "string"
+        ? req.body.image.trim()
+        : "";
+
+    // Reject posts with no text and no image
+    if (!content && !image) {
       return res.status(400).json({
-        message: "Post content is required",
+        message: "Please add text or an image to your post",
       });
     }
 
-    if (content.trim().length > 1000) {
+    // Limit text length
+    if (content.length > 1000) {
       return res.status(400).json({
         message: "Post cannot exceed 1000 characters",
       });
     }
 
-    // Create a new post
+    // Create the post
     const post = await Post.create({
       author: req.user._id,
-      content: content.trim(),
+      content,
+      image,
     });
 
-    // Send success response
+    await post.populate("author", "username profilePicture");
+
     res.status(201).json({
       message: "Post created successfully",
       post,
     });
-
   } catch (error) {
     console.error("Create post error:", error.message);
 
@@ -41,8 +52,7 @@ const createPost = async (req, res) => {
   }
 };
 
-
-
+// GET ALL POSTS
 const getAllPosts = async (req, res) => {
   try {
     const posts = await Post.find()
@@ -63,21 +73,17 @@ const getAllPosts = async (req, res) => {
   }
 };
 
-
-
-
+// GET POST BY ID
 const getPostById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Validate MongoDB ID
     if (!mongoose.isValidObjectId(id)) {
       return res.status(400).json({
         message: "Invalid post ID",
       });
     }
 
-    // Find post by ID
     const post = await Post.findById(id)
       .populate("author", "username profilePicture");
 
@@ -91,7 +97,6 @@ const getPostById = async (req, res) => {
       message: "Post fetched successfully",
       post,
     });
-
   } catch (error) {
     console.error("Get post error:", error.message);
 
@@ -101,22 +106,18 @@ const getPostById = async (req, res) => {
   }
 };
 
-
-
-
+// UPDATE POST
 const updatePost = async (req, res) => {
   try {
     const { id } = req.params;
     const { content } = req.body;
 
-    // Validate post ID
     if (!mongoose.isValidObjectId(id)) {
       return res.status(400).json({
         message: "Invalid post ID",
       });
     }
 
-    // Find the post
     const post = await Post.findById(id);
 
     if (!post) {
@@ -125,35 +126,43 @@ const updatePost = async (req, res) => {
       });
     }
 
-    // Check ownership
+    // Only the author can edit
     if (post.author.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         message: "You cannot edit this post",
       });
     }
 
-    // Validate content
-    if (typeof content !== "string" || !content.trim()) {
+    if (typeof content !== "string") {
       return res.status(400).json({
-        message: "Post content is required",
+        message: "Invalid post content",
       });
     }
 
-    if (content.trim().length > 1000) {
+    const trimmedContent = content.trim();
+
+    // Image-only posts may have empty text
+    if (!trimmedContent && !post.image) {
+      return res.status(400).json({
+        message: "A post must contain text or an image",
+      });
+    }
+
+    if (trimmedContent.length > 1000) {
       return res.status(400).json({
         message: "Post cannot exceed 1000 characters",
       });
     }
 
-    // Update post
-    post.content = content.trim();
+    post.content = trimmedContent;
     await post.save();
+
+    await post.populate("author", "username profilePicture");
 
     res.status(200).json({
       message: "Post updated successfully",
       post,
     });
-
   } catch (error) {
     console.error("Update post error:", error.message);
 
@@ -163,22 +172,17 @@ const updatePost = async (req, res) => {
   }
 };
 
-
-
-
-
+// DELETE POST
 const deletePost = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Validate post ID
     if (!mongoose.isValidObjectId(id)) {
       return res.status(400).json({
         message: "Invalid post ID",
       });
     }
 
-    // Find the post
     const post = await Post.findById(id);
 
     if (!post) {
@@ -187,20 +191,18 @@ const deletePost = async (req, res) => {
       });
     }
 
-    // Check ownership
+    // Only the author can delete
     if (post.author.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         message: "You cannot delete this post",
       });
     }
 
-    // Delete post from MongoDB
     await post.deleteOne();
 
     res.status(200).json({
       message: "Post deleted successfully",
     });
-
   } catch (error) {
     console.error("Delete post error:", error.message);
 
@@ -210,22 +212,17 @@ const deletePost = async (req, res) => {
   }
 };
 
-
-
-
-
+// LIKE OR UNLIKE POST
 const toggleLikePost = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Validate post ID
     if (!mongoose.isValidObjectId(id)) {
       return res.status(400).json({
         message: "Invalid post ID",
       });
     }
 
-    // Find the post
     const post = await Post.findById(id);
 
     if (!post) {
@@ -234,7 +231,6 @@ const toggleLikePost = async (req, res) => {
       });
     }
 
-    // Check if user already liked the post
     const userId = req.user._id.toString();
 
     const alreadyLiked = post.likes.some(
@@ -242,10 +238,8 @@ const toggleLikePost = async (req, res) => {
     );
 
     if (alreadyLiked) {
-      // Unlike the post
       post.likes.pull(req.user._id);
     } else {
-      // Like the post
       post.likes.addToSet(req.user._id);
     }
 
@@ -258,7 +252,6 @@ const toggleLikePost = async (req, res) => {
       likesCount: post.likes.length,
       liked: !alreadyLiked,
     });
-
   } catch (error) {
     console.error("Like post error:", error.message);
 
@@ -268,20 +261,17 @@ const toggleLikePost = async (req, res) => {
   }
 };
 
-
-
+// GET POSTS BY USER
 const getUserPosts = async (req, res) => {
   try {
     const { userId } = req.params;
 
-    // Validate user ID
     if (!mongoose.isValidObjectId(userId)) {
       return res.status(400).json({
         message: "Invalid user ID",
       });
     }
 
-    // Check whether the user exists
     const user = await User.findById(userId);
 
     if (!user) {
@@ -290,7 +280,6 @@ const getUserPosts = async (req, res) => {
       });
     }
 
-    // Fetch user's posts
     const posts = await Post.find({ author: userId })
       .populate("author", "username profilePicture")
       .sort({ createdAt: -1 })
@@ -308,7 +297,6 @@ const getUserPosts = async (req, res) => {
     });
   }
 };
-
 
 module.exports = {
   createPost,

@@ -156,6 +156,16 @@ function UserProfile() {
             <div className="post-card" key={post._id}>
               <p>{post.content}</p>
 
+{post.image && (
+  <img
+    src={post.image}
+    alt="Post attachment"
+    className="post-image"
+    loading="lazy"
+  />
+)}
+
+
               <small>
                 {new Date(post.createdAt).toLocaleString()}
               </small>
