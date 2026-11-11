@@ -99,6 +99,10 @@ const getUserProfile = async (req, res) => {
         profilePicture: user.profilePicture,
         followersCount: user.followers.length,
         followingCount: user.following.length,
+        isFollowing: user.followers.some(
+  (followerId) =>
+    followerId.toString() === req.user._id.toString()
+),
         joinedAt: user.createdAt,
       },
     });
