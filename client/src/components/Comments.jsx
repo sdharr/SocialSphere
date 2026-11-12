@@ -1,5 +1,6 @@
 
 import { useState, useEffect, useContext } from "react";
+import { Link } from "react-router";
 import AuthContext from "../context/AuthContext";
 
 function Comments({ postId }) {
@@ -13,11 +14,21 @@ function Comments({ postId }) {
   const [message, setMessage] = useState("");
   const [deletingId, setDeletingId] = useState(null);
 
+  const currentUserId = user?._id || user?.id;
+
   // Fetch comments from backend
   useEffect(() => {
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
     const controller = new AbortController();
 
     const fetchComments = async () => {
+      setLoading(true);
+      setError("");
+
       try {
         const response = await fetch(
           `/api/posts/${postId}/comments`,
@@ -32,13 +43,17 @@ function Comments({ postId }) {
         const data = await response.json();
 
         if (!response.ok) {
-          throw new Error(data.message || "Failed to fetch comments");
+          throw new Error(
+            data.message || "Failed to fetch comments"
+          );
         }
 
-        setComments(data.comments);
-      } catch (error) {
-        if (error.name !== "AbortError") {
-          setError(error.message);
+        if (!controller.signal.aborted) {
+          setComments(data.comments || []);
+        }
+      } catch (err) {
+        if (err.name !== "AbortError") {
+          setError(err.message);
         }
       } finally {
         if (!controller.signal.aborted) {
@@ -47,9 +62,7 @@ function Comments({ postId }) {
       }
     };
 
-    if (token) {
-      fetchComments();
-    }
+    fetchComments();
 
     return () => controller.abort();
   }, [postId, token]);
@@ -61,7 +74,9 @@ function Comments({ postId }) {
     const content = newComment.trim();
 
     if (!content || content.length > 500) {
-      setMessage("Comment must contain 1 to 500 characters.");
+      setMessage(
+        "Comment must contain 1 to 500 characters."
+      );
       return;
     }
 
@@ -84,15 +99,23 @@ function Comments({ postId }) {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || "Failed to add comment");
+        throw new Error(
+          data.message || "Failed to add comment"
+        );
       }
 
+      // Keep populated author information from backend
       const commentWithAuthor = {
         ...data.comment,
-        author: {
-          _id: user.id,
-          username: user.username,
-        },
+        author:
+          data.comment.author &&
+          typeof data.comment.author === "object"
+            ? data.comment.author
+            : {
+                _id: currentUserId,
+                username: user?.username,
+                profilePicture: user?.profilePicture || "",
+              },
       };
 
       setComments((previousComments) => [
@@ -102,8 +125,8 @@ function Comments({ postId }) {
 
       setNewComment("");
       setMessage("Comment added successfully!");
-    } catch (error) {
-      setMessage(error.message);
+    } catch (err) {
+      setMessage(err.message);
     } finally {
       setSubmitting(false);
     }
@@ -132,7 +155,9 @@ function Comments({ postId }) {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || "Failed to delete comment");
+        throw new Error(
+          data.message || "Failed to delete comment"
+        );
       }
 
       setComments((previousComments) =>
@@ -142,8 +167,8 @@ function Comments({ postId }) {
       );
 
       setMessage("Comment deleted successfully!");
-    } catch (error) {
-      setMessage(error.message);
+    } catch (err) {
+      setMessage(err.message);
     } finally {
       setDeletingId(null);
     }
@@ -162,46 +187,117 @@ function Comments({ postId }) {
       )}
 
       {/* Display existing comments */}
-      {comments.map((comment) => (
-        <div key={comment._id} className="comment">
-          <strong>
-            {comment.author?.username || "Unknown user"}
-          </strong>
+      {comments.map((comment) => {
+        const author = comment.author;
 
-          <p>{comment.content}</p>
+        const authorId =
+          author && typeof author === "object"
+            ? author._id || author.id
+            : author;
 
-          {comment.author?._id === user?.id && (
-            <button
-              type="button"
-              className="delete-comment-btn"
-              onClick={() => handleDelete(comment._id)}
-              disabled={deletingId === comment._id}
-            >
-              {deletingId === comment._id
-                ? "Deleting..."
-                : "Delete"}
-            </button>
-          )}
-        </div>
-      ))}
+        const username =
+          author?.username || "Unknown user";
 
-      {/* Add new comment */}
-      <form onSubmit={handleSubmit} className="comment-form">
+        const profilePicture =
+          author?.profilePicture || "";
+
+        const profileLink =
+          authorId === currentUserId
+            ? "/profile"
+            : `/users/${authorId}`;
+
+        return (
+          <div key={comment._id} className="comment">
+            {/* Profile picture */}
+            {authorId ? (
+              <Link to={profileLink}>
+                {profilePicture ? (
+                  <img
+                    src={profilePicture}
+                    alt={`${username}'s profile`}
+                    className="comment-avatar"
+                  />
+                ) : (
+                  <div className="comment-avatar comment-avatar-placeholder">
+                    👤
+                  </div>
+                )}
+              </Link>
+            ) : (
+              <div className="comment-avatar comment-avatar-placeholder">
+                👤
+              </div>
+            )}
+
+            {/* Comment information */}
+            <div className="comment-body">
+              <div className="comment-header">
+                {authorId ? (
+                  <Link to={profileLink}>
+                    <strong>@{username}</strong>
+                  </Link>
+                ) : (
+                  <strong>@{username}</strong>
+                )}
+
+                {comment.createdAt && (
+                  <small>
+                    {new Date(
+                      comment.createdAt
+                    ).toLocaleString()}
+                  </small>
+                )}
+              </div>
+
+              <p>{comment.content}</p>
+
+              {/* Delete your own comment */}
+              {authorId === currentUserId && (
+                <button
+                  type="button"
+                  className="delete-comment-btn"
+                  onClick={() =>
+                    handleDelete(comment._id)
+                  }
+                  disabled={deletingId === comment._id}
+                >
+                  {deletingId === comment._id
+                    ? "Deleting..."
+                    : "Delete"}
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Add a new comment */}
+      <form
+        onSubmit={handleSubmit}
+        className="comment-form"
+      >
         <input
           type="text"
           placeholder="Write a comment..."
           value={newComment}
-          onChange={(e) => setNewComment(e.target.value)}
+          onChange={(e) =>
+            setNewComment(e.target.value)
+          }
           maxLength={500}
           required
         />
 
-        <button type="submit" disabled={submitting}>
+        <button
+          type="submit"
+          disabled={submitting}
+        >
           {submitting ? "Posting..." : "Comment"}
         </button>
       </form>
 
-      {message && <p role="status">{message}</p>}
+      {message && (
+        <p role="status">{message}</p>
+      )}
     </div>
   );
 }

@@ -42,6 +42,9 @@ const createComment = async (req, res) => {
       content: content.trim(),
     });
 
+await comment.populate("author", "username profilePicture");
+
+
     res.status(201).json({
       message: "Comment created successfully",
       comment,

@@ -13,28 +13,37 @@ function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-const handlePostCreated = (newPost) => {
-  const postWithAuthor = {
-    ...newPost,
-    author: {
-      _id: user.id,
-      username: user.username,
-    },
+  // Add a newly created post to the feed
+  const handlePostCreated = (newPost) => {
+    const postWithAuthor = {
+      ...newPost,
+      author:
+        newPost.author &&
+          typeof newPost.author === "object"
+          ? newPost.author
+          : {
+            _id: user._id || user.id,
+            username: user.username,
+            profilePicture: user.profilePicture || "",
+          },
+    };
+
+    setPosts((previousPosts) => [
+      postWithAuthor,
+      ...previousPosts,
+    ]);
   };
 
-  setPosts((previousPosts) => [
-    postWithAuthor,
-    ...previousPosts,
-  ]);
-};
-
-
+  // Fetch posts from MongoDB
   useEffect(() => {
     if (!token) return;
 
     const controller = new AbortController();
 
     const fetchPosts = async () => {
+      setLoading(true);
+      setError("");
+
       try {
         const response = await fetch("/api/posts", {
           headers: {
@@ -48,10 +57,13 @@ const handlePostCreated = (newPost) => {
         }
 
         const data = await response.json();
-        setPosts(data.posts);
-      } catch (error) {
-        if (error.name !== "AbortError") {
-          setError(error.message);
+
+        if (!controller.signal.aborted) {
+          setPosts(data.posts || []);
+        }
+      } catch (err) {
+        if (err.name !== "AbortError") {
+          setError(err.message);
         }
       } finally {
         if (!controller.signal.aborted) {
@@ -69,49 +81,123 @@ const handlePostCreated = (newPost) => {
     return (
       <div>
         <h1>Welcome to SocialSphere</h1>
-        <p>Please <Link to="/login">login</Link> to view posts.</p>
+        <p>
+          Please <Link to="/login">login</Link> to view posts.
+        </p>
       </div>
     );
   }
 
+  const currentUserId = user._id || user.id;
+
   return (
     <div className="feed-container">
-      <h1>Home Feed</h1>
+      <div className="feed-heading">
+        <span className="feed-eyebrow">YOUR SOCIAL SPACE</span>
+
+        <h1>Good to see you, {user.username}! 👋</h1>
+
+        <p>See what's happening in your community.</p>
+      </div>
+
+
       <CreatePost onPostCreated={handlePostCreated} />
 
       {loading && <p>Loading posts...</p>}
+
       {error && <p role="alert">{error}</p>}
 
       {!loading && !error && posts.length === 0 && (
         <p>No posts yet.</p>
       )}
 
-      {posts.map((post) => (
+      {posts.map((post) => {
+        const author = post.author;
 
-<div className="post-card" key={post._id}>
-  <h3>{post.author?.username || "Unknown user"}</h3>
+        const authorId =
+          author && typeof author === "object"
+            ? author._id || author.id
+            : author;
 
-  <p>{post.content}</p>
+        const username =
+          author && typeof author === "object"
+            ? author.username || "Unknown user"
+            : "Unknown user";
 
-{post.image && (
-  <img
-    src={post.image}
-    alt="Post attachment"
-    className="post-image"
-    loading="lazy"
-  />
-)}
+        const profilePicture =
+          author && typeof author === "object"
+            ? author.profilePicture
+            : "";
 
+        const profileLink =
+          authorId === currentUserId
+            ? "/profile"
+            : `/users/${authorId}`;
 
-  <small>
-    {new Date(post.createdAt).toLocaleString()}
-  </small>
+        return (
+          <div className="post-card" key={post._id}>
 
-  <LikeButton post={post} />
-  <Comments postId={post._id} />
-</div>
+            {/* Post author's profile picture */}
+            <div className="post-author-row">
+              {authorId ? (
+                <Link to={profileLink}>
+                  {profilePicture ? (
+                    <img
+                      src={profilePicture}
+                      alt={`${username}'s profile`}
+                      className="post-author-avatar"
+                    />
+                  ) : (
+                    <div className="post-author-avatar post-avatar-placeholder">
+                      👤
+                    </div>
+                  )}
+                </Link>
+              ) : (
+                <div className="post-author-avatar post-avatar-placeholder">
+                  👤
+                </div>
+              )}
 
-      ))}
+              <div className="post-author-info">
+                {authorId ? (
+                  <Link to={profileLink}>
+                    <strong>@{username}</strong>
+                  </Link>
+                ) : (
+                  <strong>@{username}</strong>
+                )}
+
+                <small>
+                  {new Date(post.createdAt).toLocaleString()}
+                </small>
+              </div>
+            </div>
+
+            {/* Post text */}
+            {post.content && (
+              <p>{post.content}</p>
+            )}
+
+            {/* Post image */}
+            {post.image && (
+              <img
+                src={post.image}
+                alt="Post attachment"
+                className="post-image"
+                loading="lazy"
+              />
+            )}
+
+            {/* Like button */}
+            <LikeButton post={post} />
+
+            {/* Comments */}
+            <Comments postId={post._id} />
+
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -1,107 +1,214 @@
 
-import { useState, useContext } from "react";
+import { useContext, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import AuthContext from "../context/AuthContext";
 
-
 function Login() {
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-  });
+  const { login } = useContext(AuthContext);
+  const navigate = useNavigate();
 
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-const { login } = useContext(AuthContext);
-const navigate = useNavigate();
+  const handleSubmit = async (e) => {
+    e.preventDefault();
 
-  const [message, setMessage] = useState("");
+    if (!email.trim() || !password) {
+      setError("Please enter your email and password.");
+      return;
+    }
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+    setLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || "Unable to log in"
+        );
+      }
+
+      if (!data.token || !data.user) {
+        throw new Error("Invalid login response");
+      }
+
+      login(data.user, data.token);
+      navigate("/", { replace: true });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-
-const handleSubmit = async (e) => {
-  e.preventDefault();
-
-  setMessage("Logging in...");
-
-  try {
-    const response = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(formData),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      setMessage(data.message || "Login failed");
-      return;
-    }
-
-    if (!data.token) {
-      setMessage("Authentication token missing");
-      return;
-    }
-
-
-// Save user and JWT in Auth Context
-login(data.user, data.token);
-
-// Redirect to homepage
-navigate("/", { replace: true });
-
-
-  } catch (error) {
-    console.error("Login error:", error);
-    setMessage("Cannot connect to the server.");
-  }
-};
-
-
   return (
-    <div className="auth-container">
-      <h1>Welcome Back!</h1>
-      <p>Log in to SocialSphere</p>
+    <main className="ss-auth-page">
+      <div className="ss-auth-layout">
 
-      <form className="auth-form" onSubmit={handleSubmit}>
-        <label htmlFor="email">Email</label>
-        <input
-          id="email"
-          type="email"
-          name="email"
-          placeholder="Enter your email"
-          value={formData.email}
-          onChange={handleChange}
-          required
-        />
+        {/* Left branding panel */}
+        <section className="ss-auth-showcase">
+          <Link to="/" className="ss-auth-brand">
+            <span className="ss-auth-brand-icon">S</span>
+            SocialSphere
+          </Link>
 
-        <label htmlFor="password">Password</label>
-        <input
-          id="password"
-          type="password"
-          name="password"
-          placeholder="Enter your password"
-          value={formData.password}
-          onChange={handleChange}
-          required
-        />
+          <div className="ss-auth-showcase-content">
+            <span className="ss-auth-eyebrow">
+              YOUR COMMUNITY AWAITS
+            </span>
 
-        <button type="submit">Login</button>
-      </form>
+            <h1>
+              Connect.
+              <br />
+              Share.
+              <br />
+              <span>Belong.</span>
+            </h1>
 
-      <p role="status">{message}</p>
+            <p>
+              Your space to share moments, discover
+              people, and stay connected with
+              your community.
+            </p>
 
-      <p>
-        Don't have an account? <Link to="/register">Sign Up</Link>
-      </p>
-    </div>
+            <div className="ss-auth-features">
+              <div>✦ Share your favorite moments</div>
+              <div>✦ Discover new connections</div>
+              <div>✦ Chat with friends in real time</div>
+            </div>
+          </div>
+
+          <p className="ss-auth-showcase-footer">
+            A space for every story.
+          </p>
+        </section>
+
+        {/* Right login panel */}
+        <section className="ss-auth-form-panel">
+          <div className="ss-login-card">
+            <div className="ss-login-heading">
+              <span className="ss-login-label">
+                WELCOME BACK
+              </span>
+
+              <h2>Sign in to your account</h2>
+
+              <p>
+                Great to see you again! Enter your
+                details to continue.
+              </p>
+            </div>
+
+            <form
+              onSubmit={handleSubmit}
+              className="ss-login-form"
+            >
+              <div className="ss-login-field">
+                <label htmlFor="login-email">
+                  Email address
+                </label>
+
+                <input
+                  id="login-email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) =>
+                    setEmail(e.target.value)
+                  }
+                  autoComplete="email"
+                  required
+                  disabled={loading}
+                />
+              </div>
+
+              <div className="ss-login-field">
+                <label htmlFor="login-password">
+                  Password
+                </label>
+
+                <div className="ss-password-field">
+                  <input
+                    id="login-password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) =>
+                      setPassword(e.target.value)
+                    }
+                    autoComplete="current-password"
+                    required
+                    disabled={loading}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowPassword(!showPassword)
+                    }
+                    aria-label={
+                      showPassword
+                        ? "Hide password"
+                        : "Show password"
+                    }
+                    aria-pressed={showPassword}
+                    disabled={loading}
+                  >
+                    {showPassword ? "Hide" : "Show"}
+                  </button>
+                </div>
+              </div>
+
+              {error && (
+                <p
+                  className="ss-login-error"
+                  role="alert"
+                >
+                  {error}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                className="ss-login-submit"
+                disabled={loading}
+              >
+                {loading
+                  ? "Signing in..."
+                  : "Sign In"}
+              </button>
+            </form>
+
+            <div className="ss-login-register">
+              Don't have an account?{" "}
+              <Link to="/register">
+                Create an account
+              </Link>
+            </div>
+
+            <p className="ss-login-bottom">
+              Connect with people. Share your world.
+            </p>
+          </div>
+        </section>
+      </div>
+    </main>
   );
 }
 
